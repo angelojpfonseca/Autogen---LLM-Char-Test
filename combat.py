@@ -62,6 +62,7 @@ orc = ConversableAgent(
     llm_config=llm_config,
     function_map=function_map,
     human_input_mode="NEVER",
+    code_execution_config=False,
     is_termination_msg=lambda msg: "TERMINATE" in msg["content"]
 )
 
@@ -71,6 +72,7 @@ goblin = ConversableAgent(
     llm_config=llm_config,
     function_map=function_map,
     human_input_mode="NEVER",
+    code_execution_config=False,
     is_termination_msg=lambda msg: "TERMINATE" in msg["content"]
 )
 
@@ -91,13 +93,10 @@ player_proxy = UserProxyAgent(
     code_execution_config=False,
 )
 
-# Register the roll_d20 function for each agent
-dm.register_for_llm(name="roll_d20", description="Roll a d20 and add a modifier")(roll_d20)
-orc.register_for_llm(name="roll_d20", description="Roll a d20 and add a modifier")(roll_d20)
-goblin.register_for_llm(name="roll_d20", description="Roll a d20 and add a modifier")(roll_d20)
 
 # Set up the group chat
 max_combat_rounds = 20
+
 groupchat = GroupChat(
     agents=[dm, orc, goblin, player_proxy],
     messages=[],
