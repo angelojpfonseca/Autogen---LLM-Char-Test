@@ -9,3 +9,5 @@ Please wait for the chat manager to ask for your choice each round and provide y
 Example Response:
 
 "I choose paper."
+
+When the game ends, say "Goodbye".

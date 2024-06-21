@@ -5,13 +5,13 @@ from autogen import ConversableAgent, GroupChat, GroupChatManager
 
 
 # Define the path to the system message file for agent1
-dm_system_message_path = r'Prompt\manager.txt'
+manager_system_message_path = r'Prompt\manager.txt'
 agent1_system_message_path = r'Prompt\agent1.txt'
 agent2_system_message_path = r'Prompt\agent2.txt'
-chat_manager_system_message_path = r'Prompt\Chat_Manager.txt'
+
 
 # Open the file and read its contents into a string variable
-with open(dm_system_message_path, 'r') as file:
+with open(manager_system_message_path, 'r') as file:
     manager_system_message = file.read()
 
 with open(agent1_system_message_path, 'r') as file:
@@ -20,8 +20,6 @@ with open(agent1_system_message_path, 'r') as file:
 with open(agent2_system_message_path, 'r') as file:
     agent2_system_message = file.read()
 
-with open(chat_manager_system_message_path, 'r') as file:
-    chat_manager_system_message = file.read()
 
 load_dotenv()
 
@@ -32,7 +30,7 @@ llm_config = {
     "model": "gpt-4",
     "temperature": 0,
     "max_tokens": 256,
-    "cache_seed": 50,
+    "cache_seed": 51,
     "api_key": OPENAI_API_KEY
     }
 
@@ -41,6 +39,7 @@ manager= ConversableAgent (
     system_message=manager_system_message,
     llm_config=llm_config,
     human_input_mode="NEVER",
+    is_termination_msg=lambda msg: "Goodbye" in msg["content"]
    )
 
 
@@ -50,6 +49,7 @@ agent1 = ConversableAgent(
     system_message= agent1_system_message,
     llm_config=llm_config,
     human_input_mode="NEVER",
+    is_termination_msg=lambda msg: "Goodbye" in msg["content"]
     )
 
 agent2= ConversableAgent(
@@ -57,28 +57,36 @@ agent2= ConversableAgent(
     system_message=agent2_system_message,
     llm_config=llm_config,
     human_input_mode="NEVER",
+    is_termination_msg=lambda msg: "Goodbye" in msg["content"]
     )
 
 
-
-
-
-group_chat = GroupChat(
-    agents=[agent1, agent2],
-    messages=[],
-    max_round= 10,
+agent1.register_nested_chats(
+    trigger=agent2,
+    chat_queue=[
+        {
+            "sender": manager,
+            "recipient": agent1,
+            "summary_method": "last_msg",
+        }
+    ],
 )
 
-group_chat_manager = GroupChatManager(
-    groupchat=group_chat,
-    llm_config={"config_list": [{"model": "gpt-4", "api_key": OPENAI_API_KEY}]},
-    human_input_mode="Never",
-    system_message=chat_manager_system_message
+agent2.register_nested_chats(
+    trigger=agent1,
+    chat_queue=[
+        {
+            "sender": manager,
+            "recipient": agent2,
+            "summary_method": "last_msg",
+        }
+    ],
 )
 
-chat_result = group_chat_manager.initiate_chat(
-    manager,
-    message="""now you guys play Jo Ken Po!""",
-    summary_method="reflection_with_llm",
-)
 
+
+chat_result = agent1.initiate_chat(
+    agent2,
+    message="Let's play Jo Ken Po! Your move.",
+    max_turns=2,
+)
