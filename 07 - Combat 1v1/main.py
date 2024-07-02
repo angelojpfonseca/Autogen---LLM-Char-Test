@@ -42,8 +42,9 @@ Remember to use the provided tools for all rolls and calculations, and provide v
 """
 
 
-messages = [{"role": "user", "content": "Please simulate the combat betwen the 2 npcs"}]
- 
+messages = [{"role": "user", "content": ""}]
+
+
        
 response = client.messages.create(
 system=system_prompt,
