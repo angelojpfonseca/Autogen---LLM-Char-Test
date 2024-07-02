@@ -1,8 +1,8 @@
 import random
 import os
-import json
 from dotenv import load_dotenv
 from anthropic import Anthropic
+from anthropic.types import ToolUseBlock
 
 # Load environment variables from .env file
 load_dotenv()
@@ -14,11 +14,14 @@ def simulate_attack_roll(attack_bonus, weapon_damage):
     d20_roll = random.randint(1, 20)
     total_attack = d20_roll + attack_bonus
     
-    # Parse weapon damage (assuming format like "1d8")
-    damage_dice, damage_sides = map(int, weapon_damage.split('d'))
-    damage_roll = sum(random.randint(1, damage_sides) for _ in range(damage_dice))
+    # Parse weapon damage (assuming format like "2d6+3")
+    damage_parts = weapon_damage.split('+')
+    dice_part = damage_parts[0]
+    bonus_part = int(damage_parts[1]) if len(damage_parts) > 1 else 0
     
-    total_damage = damage_roll  # Damage doesn't include attack bonus
+    num_dice, dice_sides = map(int, dice_part.split('d'))
+    damage_roll = sum(random.randint(1, dice_sides) for _ in range(num_dice))
+    total_damage = damage_roll + bonus_part
     
     return {
         "d20_roll": d20_roll,
@@ -41,7 +44,7 @@ tools = [
                 },
                 "weapon_damage": {
                     "type": "string",
-                    "description": "The weapon damage dice (e.g., '1d8' for a longsword)."
+                    "description": "The weapon damage dice (e.g., '2d6+3' for a greatsword)."
                 }
             },
             "required": ["attack_bonus", "weapon_damage"]
@@ -51,8 +54,7 @@ tools = [
 
 def process_tool_call(tool_name, tool_input):
     if tool_name == "attack_roll_simulator":
-        params = json.loads(tool_input)
-        return simulate_attack_roll(params["attack_bonus"], params["weapon_damage"])
+        return simulate_attack_roll(tool_input["attack_bonus"], tool_input["weapon_damage"])
 
 def chat_with_claude(messages):
     if not ANTHROPIC_API_KEY:
@@ -65,26 +67,29 @@ def chat_with_claude(messages):
     try:
         message = client.messages.create(
             model=MODEL_NAME,
-            system="You have access to tools, but only use them when necessary. If a tool is not required, respond as normal",
+            system="You have access to tools, but only use them when necessary. If a tool is not required, respond as normal. When you decide to use a tool, always provide the exact input for the tool in your response.",
             max_tokens=4096,
             messages=messages,
             tools=tools,
         )
 
-        if message.stop_reason == "tool_calls":
-            tool_call = message.content[-1].tool_calls[0]
-            tool_name = tool_call.name
-            tool_input = tool_call.arguments
+        print(f"Initial response: {message.content}")
 
-            print(f"\nTool Used: {tool_name}")
+        # Check if the message content indicates tool use
+        tool_use_block = next((content for content in message.content if isinstance(content, ToolUseBlock)), None)
+
+        if tool_use_block:
+            tool_name = tool_use_block.name
+            tool_input = tool_use_block.input
+
+            print(f"Tool Used: {tool_name}")
             print(f"Tool Input: {tool_input}")
-             
-            try:
-              tool_result = process_tool_call(tool_name, tool_input)
-              print(f"Tool Result: {tool_result}")
-            except Exception as e:
-                print(f"An error occurred: {str(e)}")
 
+            # Call the tool
+            tool_result = process_tool_call(tool_name, tool_input)
+            print(f"Tool Result: {tool_result}")
+
+            # Create a new message with the tool result
             response = client.messages.create(
                 model=MODEL_NAME,
                 max_tokens=4096,
@@ -93,10 +98,9 @@ def chat_with_claude(messages):
                     {"role": "tool", "content": str(tool_result)},
                 ],
             )
+            return response.content[0].text if response.content else "No response generated."
         else:
-            response = message
-
-        return response.content[0].text if response.content else "No response generated."
+            return message.content[0].text if message.content else "No response generated."
 
     except Exception as e:
         print(f"An error occurred: {str(e)}")
@@ -122,6 +126,8 @@ def main():
             conversation.append({"role": "assistant", "content": response})
         else:
             print("\nClaude: I'm sorry, I encountered an error. Please try again.")
-
+            # Remove the last user message if there was an error
+            conversation.pop()
+            
 if __name__ == "__main__":
     main()
