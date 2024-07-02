@@ -7,10 +7,6 @@ load_dotenv()
 api_key = os.getenv("ANTHROPIC_API_KEY")
 client = Anthropic(api_key=api_key)
 
-def calculator(operation, operand1, operand2):
-    if operation == "add":
-        return operand1 + operand2
-
 
 def calculator(operation, operand1, operand2):
     if operation == "add":

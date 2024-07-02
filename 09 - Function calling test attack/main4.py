@@ -1,8 +1,8 @@
 import random
 import os
+import json
 from dotenv import load_dotenv
 from anthropic import Anthropic
-from anthropic.types import ToolUseBlock
 
 # Load environment variables from .env file
 load_dotenv()
