@@ -20,11 +20,16 @@ logger.setLevel(logging.DEBUG)
 
 def process_tool_call(tool_name, tool_input):
     if tool_name == "simulate_melee_attack":
-        return simulate_melee_attack(tool_input["attacker"], tool_input["defender"])
+        output = simulate_melee_attack(tool_input["attacker"], tool_input["defender"])
     elif tool_name == "simulate_ranged_attack":
-        return simulate_ranged_attack(tool_input["attacker"], tool_input["defender"])
+        output = simulate_ranged_attack(tool_input["attacker"], tool_input["defender"])
     else:
-        return f"Unknown tool: {tool_name}"
+        output = f"Unknown tool: {tool_name}"
+    
+    # Update the tool display in the GUI
+    gui.update_tool_display(tool_name, json.dumps(tool_input, indent=2), output)
+    
+    return output
 
 def chat_function(conversation, process_tool_call, model_name):
     return chat_with_claude(conversation, ANTHROPIC_API_KEY, tools, process_tool_call, model_name, SYSTEM_PROMPT)
@@ -59,6 +64,7 @@ def main():
     
     initial_conversation = initialize_conversation()
     
+    global gui  # Make gui a global variable so it can be accessed in process_tool_call
     gui = DnDChatbotGUI(
         root,
         lambda conv, ptc, model: chat_function(initial_conversation + conv, ptc, model),

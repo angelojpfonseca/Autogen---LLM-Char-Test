@@ -1,12 +1,6 @@
 import random
 from character_data import characters
 
-def roll_dice(dice_string):
-    """Roll dice based on a string like '2d6' or '1d12'."""
-    num_dice, sides = map(int, dice_string.split('d'))
-    rolls = [random.randint(1, sides) for _ in range(num_dice)]
-    return rolls, sum(rolls)
-
 def simulate_melee_attack(attacker_name, defender_name):
     attacker = characters[attacker_name.lower()]
     defender = characters[defender_name.lower()]
@@ -18,10 +12,6 @@ def simulate_melee_attack(attacker_name, defender_name):
     attack_roll = random.randint(1, 20)
     total_attack = attack_roll + melee_action.attack_bonus
     
-    # Roll for damage
-    damage_rolls, damage_total = roll_dice(melee_action.damage_dice)
-    total_damage = damage_total + melee_action.damage_bonus
-    
     # Determine if it's a hit
     is_hit = total_attack >= defender.armor_class
     
@@ -32,10 +22,15 @@ def simulate_melee_attack(attacker_name, defender_name):
     output += f"Result: {'Hit' if is_hit else 'Miss'}\n"
     
     if is_hit:
+        # Roll for damage
+        damage_rolls, damage_total = roll_dice(melee_action.damage_dice)
+        total_damage = damage_total + melee_action.damage_bonus
+        
+        # Update defender's HP
+        defender.hit_points = max(0, defender.hit_points - total_damage)
+
         output += f"Damage Roll: {damage_rolls} ({melee_action.damage_dice}) + {melee_action.damage_bonus} = {total_damage}\n"
-        defender.hit_points -= total_damage
-        defender.hit_points = max(0, defender.hit_points)  # Ensure HP doesn't go below 0
-        output += f"{defender.name}'s new HP: {defender.hit_points}"
+        output += f"{defender.name}'s new HP: {defender.hit_points}\n"
     
     return output
 
@@ -50,10 +45,6 @@ def simulate_ranged_attack(attacker_name, defender_name):
     attack_roll = random.randint(1, 20)
     total_attack = attack_roll + ranged_action.attack_bonus
     
-    # Roll for damage
-    damage_rolls, damage_total = roll_dice(ranged_action.damage_dice)
-    total_damage = damage_total + ranged_action.damage_bonus
-    
     # Determine if it's a hit
     is_hit = total_attack >= defender.armor_class
     
@@ -64,12 +55,22 @@ def simulate_ranged_attack(attacker_name, defender_name):
     output += f"Result: {'Hit' if is_hit else 'Miss'}\n"
     
     if is_hit:
+        # Roll for damage
+        damage_rolls, damage_total = roll_dice(ranged_action.damage_dice)
+        total_damage = damage_total + ranged_action.damage_bonus
+        
+        # Update defender's HP
+        defender.hit_points = max(0, defender.hit_points - total_damage)
+
         output += f"Damage Roll: {damage_rolls} ({ranged_action.damage_dice}) + {ranged_action.damage_bonus} = {total_damage}\n"
-        defender.hit_points -= total_damage
-        defender.hit_points = max(0, defender.hit_points)  # Ensure HP doesn't go below 0
-        output += f"{defender.name}'s new HP: {defender.hit_points}"
+        output += f"{defender.name}'s new HP: {defender.hit_points}\n"
     
     return output
+
+def roll_dice(dice_string):
+    num_dice, sides = map(int, dice_string.split('d'))
+    rolls = [random.randint(1, sides) for _ in range(num_dice)]
+    return rolls, sum(rolls)
 
 tools = [
     {
