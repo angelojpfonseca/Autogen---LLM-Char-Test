@@ -3,19 +3,20 @@ import logging
 from dotenv import load_dotenv
 import os
 import json
-from chat_utils import chat_with_claude
+from chat_utils import chat_with_claude, ColoredFormatter
 from dnd_tools import tools, simulate_melee_attack, simulate_ranged_attack
 from gui import DnDChatbotGUI
 from character_data import characters
+from prompts import SYSTEM_PROMPT, CHARACTER_INFO_PROMPT, INITIAL_USER_QUERY
+from debug_console import DebugConsole
 
 # Load environment variables
 load_dotenv()
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG, filename='debug.log', filemode='w',
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 def process_tool_call(tool_name, tool_input):
     if tool_name == "simulate_melee_attack":
@@ -26,23 +27,19 @@ def process_tool_call(tool_name, tool_input):
         return f"Unknown tool: {tool_name}"
 
 def chat_function(conversation, process_tool_call, model_name):
-    return chat_with_claude(conversation, ANTHROPIC_API_KEY, tools, process_tool_call, model_name)
+    return chat_with_claude(conversation, ANTHROPIC_API_KEY, tools, process_tool_call, model_name, SYSTEM_PROMPT)
 
 def initialize_conversation():
-    # Create an initial message that includes all character data
     character_info = "Here are the available characters and their stats for the D&D combat simulation:\n\n"
     for char_name, char_data in characters.items():
         character_info += f"{char_name.capitalize()}:\n"
         character_info += json.dumps(char_data.to_dict(), indent=2)
         character_info += "\n\n"
     
-    character_info += ("You can use these characters in combat simulations. "
-                       "When a user requests a combat simulation, use either the simulate_melee_attack "
-                       "or simulate_ranged_attack tool with the appropriate character names as attacker and defender.")
+    character_info += CHARACTER_INFO_PROMPT
 
-    # Start with a user message asking about available characters
     initial_conversation = [
-        {"role": "user", "content": "What characters are available for the D&D combat simulation?"},
+        {"role": "user", "content": INITIAL_USER_QUERY},
         {"role": "assistant", "content": character_info}
     ]
 
@@ -50,6 +47,16 @@ def initialize_conversation():
 
 def main():
     root = tk.Tk()
+    
+    # Create debug console
+    debug_console = DebugConsole(root)
+    logger.addHandler(debug_console)
+    
+    # Set up colored formatter for console output
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(ColoredFormatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logger.addHandler(console_handler)
+    
     initial_conversation = initialize_conversation()
     
     gui = DnDChatbotGUI(
