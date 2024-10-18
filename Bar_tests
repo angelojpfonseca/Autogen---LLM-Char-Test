@@ -1,0 +1,94 @@
+import os
+
+from dotenv import load_dotenv
+from autogen import ConversableAgent
+from definitions import Class, Subclass, Race, Subrace
+from character_old import Character
+from functions import pretty_print, calculator
+
+
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+llm_config = {
+    "model": "gpt-4",
+    "temperature": 0,
+    "max_tokens": 512,
+    "api_key": OPENAI_API_KEY,
+}
+
+
+user_proxy = ConversableAgent(
+    name="User",
+    llm_config=False,
+    is_termination_msg=lambda msg: msg.get("content") is not None
+    and "TERMINATE" in msg["content"],
+    human_input_mode="ALWAYS",
+)
+
+
+bartender_char = Character(
+    name="John",
+    race=Race.ELF,
+    subrace=Subrace.HIGH_ELF,
+    class_=Class.CLERIC,
+    subclass=Subclass.LIFE_DOMAIN,
+    level=1,
+    personality="Friendly, observant, and a good listener. John has a knack for reading people and often provides sage advice.",
+    llm_config=llm_config,
+)
+bartender_llm = bartender_char.create_conversable_agent()
+
+
+print("\n")
+print("ABILITIES:")
+print("\n")
+for keys, values in bartender_char.abilities.abilities_map.items():
+    print(f"{keys}: {values.ability_value}")
+print("\n")
+print("SKILLS:")
+print("\n")
+for keys, values in bartender_char.skills.skills_map.items():
+    print(
+        f"{keys}: {values.skill_bonus}"
+        f"{' => Proficiency: ' + str(values.skill_proficiency) if values.skill_proficiency else ''}"
+    )
+print("\n")
+print("Background")
+print(f"  - name: {bartender_char.background.name}")
+print("  - description: ", bartender_char.background.description)
+print(
+    f"  - skill proficencies: {', '.join(skill.value for skill in bartender_char.background.skill_proficiencies)}"
+)
+print(
+    "  - tool proficiencies: ",
+    bartender_char.background.tool_proficiencies,
+)
+print("  - languages: ", bartender_char.background.languages)
+print("  - equipment: ", bartender_char.background.equipment)
+print(
+    "\n  - personality_traits: ", bartender_char.background.personality_traits
+)
+print("  - ideals: ", bartender_char.background.ideals)
+print("  - bonds: ", bartender_char.background.bonds)
+print("  - flaws: ", bartender_char.background.flaws)
+print("\n")
+
+chat_result = bartender_llm.initiate_chat(
+    recipient=user_proxy,
+    message="Hello! How can I help you today?",
+    summary_method="reflection_with_llm",
+)
+print(f"\n{chat_result.summary}\n")
+print(f"\n{chat_result.cost}\n")
+
+
+# bartender_llm.register_for_llm(
+#     name="calculator",
+#     description="A calculator tool that accepts nested expression as input",
+# )(calculator)
+# user_proxy.register_for_execution(name="calculator")(calculator)
+
+# chat_result = user_proxy.initiate_chat(
+#     bartender_llm, message="What is (456 + 789) / 5 + (32 + 23) * 8?"
+# )
