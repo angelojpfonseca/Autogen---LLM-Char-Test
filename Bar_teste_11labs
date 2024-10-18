@@ -1,0 +1,197 @@
+import os
+import sys
+import threading
+import queue
+import time
+from anthropic import Anthropic
+from elevenlabs import play, stream
+from elevenlabs.client import ElevenLabs
+from dotenv import load_dotenv
+from character_old import Character
+from definitions import Class, Race, Subclass, Subrace
+
+# Load environment variables
+load_dotenv()
+
+
+cleric = Character(
+    name="Florian",
+    race=Race.ELF,
+    subrace=Subrace.HIGH_ELF,
+    class_=Class.CLERIC,
+    subclass=Subclass.LIFE_DOMAIN,
+    level=1,
+)
+cleric_prompt = cleric.create_character_system_prompt()
+
+# Initialize Anthropic client
+anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+# Initialize ElevenLabs client
+eleven_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+
+# System prompt
+SYSTEM_PROMPT = cleric_prompt
+conversation = []
+audio_queue = queue.Queue()
+
+
+def stream_chat_with_claude(user_input):
+    conversation.append({"role": "user", "content": user_input})
+
+    try:
+        with anthropic_client.messages.stream(
+            model="claude-3-sonnet-20240229",
+            max_tokens=1000,
+            messages=conversation,
+            system=SYSTEM_PROMPT,
+        ) as stream:
+            response_content = ""
+            print("Claude: ", end="", flush=True)
+            for text in stream.text_stream:
+                print(text, end="", flush=True)
+                response_content += text
+                audio_queue.put(text)
+            print()  # New line after response
+            audio_queue.put(None)  # Signal end of response
+
+        conversation.append({"role": "assistant", "content": response_content})
+        return response_content
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+def chat_with_claude(user_input):
+    conversation.append({"role": "user", "content": user_input})
+
+    try:
+        response = anthropic_client.messages.create(
+            model="claude-3-sonnet-20240229",
+            max_tokens=1000,
+            messages=conversation,
+            system=SYSTEM_PROMPT,
+        )
+        response_content = response.content[0].text
+        print(f"Claude: {response_content}")
+        conversation.append({"role": "assistant", "content": response_content})
+        return response_content
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+def text_to_speech_worker():
+    full_text = ""
+    while True:
+        text = audio_queue.get()
+        if text is None:
+            break
+        full_text += text
+        if (
+            len(full_text) > 20 or audio_queue.empty()
+        ):  # Adjust chunk size as needed
+            audio_stream = eleven_client.generate(
+                text=full_text,
+                voice="13auRs13gEKuqxX054G2",
+                # model="eleven_monolingual_v1",
+                model="eleven_multilingual_v2",
+                stream=True,
+            )
+            for chunk in audio_stream:
+                yield chunk
+            full_text = ""
+        audio_queue.task_done()
+
+
+def play_audio_stream():
+    stream(text_to_speech_worker())
+
+
+def play_audio(text):
+    audio = eleven_client.generate(
+        text=text, voice="13auRs13gEKuqxX054G2", model="eleven_multilingual_v2"
+    )
+    play(audio)
+
+
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def print_conversation_history():
+    clear_screen()
+    for message in conversation:
+        role = "You" if message["role"] == "user" else "Claude"
+        print(f"{role}: {message['content']}\n")
+
+
+def main():
+    print("Welcome to the Claude Chatbot!")
+
+    print("\nChoose your preferred mode:")
+    print("1. Streamed (real-time text)")
+    print("2. Non-streamed (complete response)")
+
+    while True:
+        choice = input("Enter 1 or 2: ").strip()
+        if choice in ["1", "2"]:
+            break
+        print("Invalid choice. Please enter 1 or 2.")
+
+    is_streamed = choice == "1"
+
+    print("\nDo you want audio output?")
+    print("1. Yes")
+    print("2. No")
+
+    while True:
+        audio_choice = input("Enter 1 or 2: ").strip()
+        if audio_choice in ["1", "2"]:
+            break
+        print("Invalid choice. Please enter 1 or 2.")
+
+    with_audio = audio_choice == "1"
+
+    print(
+        f"\nYou've chosen the {'streamed' if is_streamed else 'non-streamed'} version {'with' if with_audio else 'without'} audio."
+    )
+    print(
+        "Type 'quit' to exit, 'clear' to start a new conversation, 'history' to view conversation history."
+    )
+
+    while True:
+        user_input = input("You: ").strip()
+
+        if user_input.lower() == "quit":
+            print("Goodbye!")
+            break
+        elif user_input.lower() == "clear":
+            conversation.clear()
+            clear_screen()
+            print("Conversation cleared. Starting a new chat.")
+            continue
+        elif user_input.lower() == "history":
+            print_conversation_history()
+            continue
+
+        if is_streamed:
+            if with_audio:
+                # Start audio streaming in a separate thread
+                audio_thread = threading.Thread(target=play_audio_stream)
+                audio_thread.start()
+
+            response = stream_chat_with_claude(user_input)
+
+            if with_audio:
+                # Wait for audio to finish
+                audio_thread.join()
+        else:
+            response = chat_with_claude(user_input)
+            if with_audio:
+                play_audio(response)
+
+        if response.startswith("Error:"):
+            print(f"An error occurred: {response}")
+
+
+if __name__ == "__main__":
+    main()
